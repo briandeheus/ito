@@ -1,0 +1,223 @@
+<html>
+<head>
+    <title>My ITO</title>
+    <link rel="stylesheet" href="/static/dist/style.css">
+</head>
+<body class="w-full h-full bg-gray-900">
+<template id="delete-button">
+    {% include "partials/delete-button.html" %}
+</template>
+<div class="max-w-[520px] p-8 flex flex-col">
+    <div>
+        <textarea id="entry" class="rounded-t-lg w-full h-32 text-sm p-3 bg-slate-300 focus:outline-none"></textarea>
+        <button id="submit-entry" class="rounded-b-lg w-full bg-sky-600 text-white py-2 ">Submit</button>
+    </div>
+    <div class="flex justify-center">
+        <div class="w-1 h-16 bg-sky-800"></div>
+    </div>
+    <div class="flex flex-col justify-center" id="timeline"></div>
+    <div class="flex justify-center">
+        <div id="load-more" class="w-12 h-12 bg-sky-800 rounded-full cursor-pointer text-xs flex justify-center items-center text-gray-300 font-bold">
+            <div style="margin-top: -4px">more</div>
+        </div>
+    </div>
+</div>
+<script>
+    const entryField = document.getElementById("entry");
+    const submitBtn = document.getElementById("submit-entry");
+    const timeline = document.getElementById("timeline");
+    const deleteTmpl = document.getElementById("delete-button");
+    const loadMoreBtn = document.getElementById("load-more");
+
+    // Used to page through the results
+    let lastEntryOn;
+
+    /**
+     * Helper function to format an ISO string into a local timestamp.
+     * @param date
+     * @returns {`${number}/${string}/${string} ${string}:${string}:${string}`}
+     */
+    const formatTimestamp = (date) => {
+        const pad = (number) => number < 10 ? `0${number}` : number;
+        return `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+    };
+
+    /**
+     * Handles deletion of an entry based on EntryID.
+     * EntryID is set in the parent DOM element to handle deletion in the UI.
+     * @param entryId
+     * @returns {Promise<void>}
+     */
+    const deleteEntry = async (entryId) => {
+
+        if (!confirm("Delete this entry?")) return;
+
+        const res = await fetch(`/api/v1/entries/${entryId}`, {
+            method: "delete"
+        });
+
+        if (res.status !== 200) {
+            alert("Something went wrong. Check the developer console.");
+            return;
+        }
+
+        const data = await res.json();
+        const existingEntry = document.querySelector(`[data-entry-id="${entryId}"]`);
+
+        if (!existingEntry) return;
+        if (!data["delete"]) return;
+
+        existingEntry.parentElement.removeChild(existingEntry)
+
+    }
+
+    /**
+     * Creates an element that holds the entry.
+     * @param entryId
+     * @param content
+     * @param createdOn
+     * @returns {HTMLDivElement}
+     */
+    const createEntry = (entryId, content, createdOn) => {
+        const container = document.createElement("div");
+        container.dataset.entryId = entryId
+
+        const wrapper = document.createElement("div");
+        wrapper.classList.add("rounded", "bg-slate-300", "p-2", "relative")
+
+        const contentElm = document.createElement("div")
+        contentElm.classList.add("text-gray-800", "text-sm", "whitespace-pre-line", "mb-1")
+        contentElm.textContent = content;
+
+        const dateElm = document.createElement("div");
+        dateElm.classList.add("text-xs", "text-gray-600")
+        dateElm.textContent = formatTimestamp(new Date(createdOn));
+
+        const deleteBtn = deleteTmpl.content.cloneNode(true);
+        deleteBtn.firstElementChild.addEventListener("click", () => {
+            deleteEntry(entryId);
+        });
+
+        wrapper.append(content);
+        wrapper.append(dateElm);
+        wrapper.append(deleteBtn);
+
+        const lineContainer = document.createElement("div")
+        lineContainer.classList.add("flex", "justify-center");
+        const line = document.createElement("div");
+        line.classList.add("w-1", "h-8", "bg-sky-800")
+        lineContainer.append(line);
+
+        container.append(wrapper);
+        container.append(lineContainer);
+        return container;
+    }
+
+    /**
+     * Prepend an entry to the timeline.
+     * @param entryId
+     * @param content
+     * @param createdOn
+     */
+    const prependEntry = (entryId, content, createdOn) => {
+        timeline.prepend(createEntry(entryId, content, createdOn));
+    }
+
+    /**
+     * Append an entry to the timeline
+     * @param entryId
+     * @param content
+     * @param createdOn
+     */
+    const appendEntry = (entryId, content, createdOn) => {
+        timeline.append(createEntry(entryId, content, createdOn));
+    }
+
+    /**
+     * Handles the submit button on either enter or when the submit button is pressed.
+     * @returns {Promise<void>}
+     */
+    const handleSubmit = async () => {
+
+        const headers = new Headers();
+        headers.set("content-type", "application/json");
+        const res = await fetch("/api/v1/entries", {
+            headers,
+            method: "post",
+            body: JSON.stringify({content: entryField.value})
+        });
+
+        if (res.status !== 200) {
+            alert("Something went wrong. Check the developer console.");
+            return;
+        }
+
+        const data = await res.json();
+        prependEntry(data.id, data.content, data.created_on);
+
+        entryField.value = "";
+
+    }
+
+    entryField.addEventListener("keypress", (event) => {
+        const {shiftKey, code} = event;
+        if (!shiftKey && code === "Enter") {
+            event.preventDefault();
+            handleSubmit();
+        }
+    });
+
+    submitBtn.addEventListener("click", handleSubmit);
+
+    loadMoreBtn.addEventListener("click", async () => {
+
+        console.log(lastEntryOn);
+        const entries = await getEntries(lastEntryOn);
+        entries.forEach(entry => {
+            appendEntry(entry.id, entry.content, entry.created_on);
+            lastEntryOn = entry.created_on;
+        });
+
+    })
+
+    /**
+     * Fetches the latest N entries from before a certain time.
+     * @param before
+     * @param limit
+     * @returns {Promise<*>}
+     */
+    const getEntries = async (before = null, limit = 50) => {
+
+        const params = new URLSearchParams({limit: limit.toString()});
+
+        if (before) params.set("before", before);
+
+        const res = await fetch(`/api/v1/entries?${params}`);
+
+        if (res.status > 400) {
+            alert("Something went wrong fetching entries. Check the developer console");
+            return;
+        }
+
+        const {entries} = await res.json();
+        return entries;
+
+    }
+
+    (async () => {
+
+        const entries = await getEntries();
+
+        // Do nothing if we don't have entries.
+        if (entries.length === 0) return;
+
+        // Set LastEntryOn to the first entry in the list, since we're reversing this list.
+        entries.forEach(entry => {
+            appendEntry(entry.id, entry.content, entry.created_on);
+            lastEntryOn = entry.created_on;
+        });
+
+    })();
+</script>
+</body>
+</html>

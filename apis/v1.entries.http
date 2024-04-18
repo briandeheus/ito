@@ -1,0 +1,8 @@
+POST http://localhost:8000/api/v1/entries
+Content-Type: application/json
+
+{
+  "content": "Can't get postgres to work on this machine. Tried a bunch of stuff, still doesn't work."
+}
+
+###
