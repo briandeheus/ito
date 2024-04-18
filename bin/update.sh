@@ -7,7 +7,7 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 # Switch to 'ito' user to fetch latest updates from the git repository
-su ito -c 'cd ~/live && git fetch origin main'
+su ito -c 'cd ~/live && git pull origin main'
 
 # Reload the systemd daemon
 systemctl daemon-reload
