@@ -1,0 +1,16 @@
+[Unit]
+Description=ITO
+After=network.target
+
+[Service]
+User=l2m2
+Group=l2m2
+WorkingDirectory=/home/ito/live
+Environment="PATH=/home/ito/live/.venv/bin"
+ExecStart=/home/l2m2/live/.venv/bin/uvicorn l2m2.asgi:application --lifespan off --workers 8
+
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
