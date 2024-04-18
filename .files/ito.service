@@ -3,8 +3,8 @@ Description=ITO
 After=network.target
 
 [Service]
-User=l2m2
-Group=l2m2
+User=ito
+Group=ito
 WorkingDirectory=/home/ito/live
 Environment="PATH=/home/ito/live/.venv/bin"
 ExecStart=/home/ito/live/.venv/bin/uvicorn main:app
