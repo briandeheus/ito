@@ -1,31 +1,41 @@
 #!/bin/bash
 
-# Create user 'ito'
-useradd -m ito
+# Ensure the script is running as root
+if [[ $EUID -ne 0 ]]; then
+   echo "This script must be run as root"
+   exit 1
+fi
 
-# Switch to user 'ito'
-su - ito <<EOF
+# Create user 'ito' if it doesn't already exist
+if ! id -u ito > /dev/null 2>&1; then
+    useradd -m -s /bin/bash ito
+fi
 
-# Clone the repository into the 'live' directory
+# Commands to run as the new 'ito' user
+su ito <<'EOF'
+cd ~
+# Clone the repository into 'live' directory
 git clone https://github.com/briandeheus/ito live
 
-# Create a virtual environment in the 'live' directory
+# Change directory to 'live'
 cd live
+
+# Create a Python virtual environment
 python3 -m venv .venv
 
 # Activate the virtual environment
 source .venv/bin/activate
 
-# Install requirements
+# Install dependencies
 pip install -r requirements.txt
 
-# Deactivate the virtual environment
+# Exit the virtual environment
 deactivate
 
 EOF
 
-# Exit user 'ito'
-exit
+# Create a symlink for the systemd service
+ln -sf /home/ito/live/.files/ito.service /etc/systemd/system/ito.service
 
-# Make symlink for systemd service
-ln -s /home/ito/live/.files/ito.service /etc/systemd/system/ito.service
+# Reload systemd to recognize the new service
+systemctl daemon-reload
